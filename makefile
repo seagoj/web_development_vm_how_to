@@ -33,7 +33,7 @@ YUI_COMPRESSOR_VERSION = 2.4.7
 
 
 target-list :
-	@echo "This makefile builds the PHP-enabled web server."
+	@echo "This makefile builds packages from source for a PHP-enabled web server."
 	@echo
 	@echo "To build the server:"
 	@echo "    make php_web_server"
@@ -102,23 +102,23 @@ compass_install :
 	-ln -s `which compass` /usr/bin/compass
 
 
-get_nginx_source :
+cache_nginx_source :
 	@if [ ! -f $(SOURCE_DOWNLOAD_DIR)/nginx-$(NGINX_VERSION).tar.gz ]; then	\
 		mkdir -p $(SOURCE_DOWNLOAD_DIR) && cd $(SOURCE_DOWNLOAD_DIR) &&		\
 		wget http://nginx.org/download/nginx-$(NGINX_VERSION).tar.gz;		\
 	fi
 
-nginx_build : get_nginx_source
+install_nginx_dependencies :
 	apt-get update
-	apt-get install -y libc6 libpcre3 libpcre3-dev libpcrecpp0 libssl0.9.8 libssl-dev zlib1g zlib1g-dev lsb-base
+	apt-get install -y make libc6 libpcre3 libpcre3-dev libpcrecpp0 libssl0.9.8 libssl-dev zlib1g zlib1g-dev lsb-base
 
-	mkdir -p $(WORKING_DIR) && cd $(WORKING_DIR) &&							\
-	#																		\
-	cp $(SOURCE_DOWNLOAD_DIR)/nginx-$(NGINX_VERSION).tar.gz . &&			\
-	tar -xvf nginx-$(NGINX_VERSION).tar.gz &&								\
-	#																		\
-	cd nginx-$(NGINX_VERSION) &&											\
-	#																		\
+nginx_build : cache_nginx_source install_nginx_dependencies
+	mkdir -p $(WORKING_DIR)
+
+	cp $(SOURCE_DOWNLOAD_DIR)/nginx-$(NGINX_VERSION).tar.gz $(WORKING_DIR)
+	tar -C $(WORKING_DIR) -xvf $(WORKING_DIR)/nginx-$(NGINX_VERSION).tar.gz
+
+	cd $(WORKING_DIR)/nginx-$(NGINX_VERSION) &&								\
 	./configure																\
 		--prefix=/usr														\
 		--sbin-path=/usr/sbin												\
@@ -181,28 +181,28 @@ nginx_install : gdebi_install
 
 	service nginx start
 
-
-get_php_source :
+cache_php_source :
 	@if [ ! -f $(SOURCE_DOWNLOAD_DIR)/php-$(PHP_VERSION).tar.bz2 ]; then												\
 		mkdir -p $(SOURCE_DOWNLOAD_DIR) && cd $(SOURCE_DOWNLOAD_DIR) &&													\
 		wget http://www.php.net/get/php-$(PHP_VERSION).tar.bz2/from/this/mirror -O php-$(PHP_VERSION).tar.bz2;			\
 	fi
 
-php_build : get_php_source
+install_php_dependencies :
 	apt-get update
-	apt-get install -y autoconf libxml2 libxml2-dev libcurl3 libcurl4-gnutls-dev libmagic-dev
+	apt-get install -y make autoconf libxml2 libxml2-dev libcurl3 libcurl4-gnutls-dev libmagic-dev
 
-	mkdir -p $(WORKING_DIR) && cd $(WORKING_DIR) &&							\
-	#																		\
-	cp $(SOURCE_DOWNLOAD_DIR)/php-$(PHP_VERSION).tar.bz2 . &&				\
-	tar -xvf php-$(PHP_VERSION).tar.bz2 &&									\
-	#																		\
-	cd php-$(PHP_VERSION) &&												\
-	#																		\
+php_build : cache_php_source install_php_dependencies
+	mkdir -p $(WORKING_DIR)
+
+	cp $(SOURCE_DOWNLOAD_DIR)/php-$(PHP_VERSION).tar.bz2 $(WORKING_DIR)
+	tar -C $(WORKING_DIR) -xvf $(WORKING_DIR)/php-$(PHP_VERSION).tar.bz2
+
+	cd $(WORKING_DIR)/php-$(PHP_VERSION) &&									\
 	./configure																\
 		--prefix=/usr														\
 		--sysconfdir=/etc                                                   \
 		--with-config-file-path=/etc										\
+		--without-pear														\
 		--enable-fpm														\
 		--with-fpm-user=www-data											\
 		--with-fpm-group=www-data											\
@@ -216,7 +216,7 @@ php_build : get_php_source
 	#																		\
 	$(MAKE)
 
-php_package : fpm_install php_build
+php_package : fpm_install #php_build
 	mkdir -p $(WORKING_DIR)/php-$(PHP_VERSION)-install
 
 	# Install PHP into a directory suitable for turning into a package
@@ -281,29 +281,28 @@ mysql_user :
 	groupadd mysql &&														\
 	useradd -c "MySQL Server" -r -g mysql mysql
 
-get_mysql_source :
+cache_mysql_source :
 	@if [ ! -f $(SOURCE_DOWNLOAD_DIR)/mysql-$(MYSQL_VERSION).tar.gz ]; then				\
 		mkdir -p $(SOURCE_DOWNLOAD_DIR) && cd $(SOURCE_DOWNLOAD_DIR) &&					\
 		wget http://cdn.mysql.com/Downloads/MySQL-5.6/mysql-$(MYSQL_VERSION).tar.gz;	\
 	fi
 
-mysql_build : get_mysql_source
+install_mysql_dependencies :
 	apt-get update
-	apt-get install -y build-essential cmake libaio-dev libncurses5-dev
+	apt-get install -y make build-essential cmake libaio-dev libncurses5-dev
 
-	mkdir -p $(WORKING_DIR) && cd $(WORKING_DIR) &&												\
-	#																							\
-	cp $(SOURCE_DOWNLOAD_DIR)/mysql-$(MYSQL_VERSION).tar.gz . &&								\
-	tar -xvf mysql-$(MYSQL_VERSION).tar.gz &&													\
-	#																							\
-	cd mysql-$(MYSQL_VERSION) &&																\
-	mkdir build && cd build &&																	\
-	#																							\
-	cmake																						\
-		-DCMAKE_INSTALL_PREFIX=$(WORKING_DIR)/mysql-$(MYSQL_VERSION)-install/usr/share/mysql	\
-		-DSYSCONFDIR=/etc																		\
-		.. &&																					\
-	#																							\
+mysql_build : cache_mysql_source install_mysql_dependencies
+	mkdir -p $(WORKING_DIR)
+
+	cp $(SOURCE_DOWNLOAD_DIR)/mysql-$(MYSQL_VERSION).tar.gz $(WORKING_DIR)
+	tar -C $(WORKING_DIR) -xvf $(WORKING_DIR)/mysql-$(MYSQL_VERSION).tar.gz
+
+	mkdir -p $(WORKING_DIR)/mysql-$(MYSQL_VERSION)/build && cd $(WORKING_DIR)/mysql-$(MYSQL_VERSION)/build 	\
+	cmake																									\
+		-DCMAKE_INSTALL_PREFIX=$(WORKING_DIR)/mysql-$(MYSQL_VERSION)-install/usr/share/mysql				\
+		-DSYSCONFDIR=/etc																					\
+		.. &&																								\
+	#																										\
 	$(MAKE)
 
 mysql_package : fpm_install mysql_build
